@@ -5,9 +5,16 @@
 # hadolint ignore=DL3007
 #FROM niicloudoperation/notebook:latest@sha256:0ef08db97dbdbdc2931eb4960b0533ec811d302d440440a51388be642c5c151a as notebook_common
 # docker login が必要
-FROM jxta/niicloudoperationnotebook:20200812
+FROM harbor.vcloud.nii.ac.jp/vcp_dev/base-notebook:20190730-0ef0
 
+ARG IMAGE_TAG
+ENV VCP_CONTAINER_VERSION ${IMAGE_TAG}
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# TODO USERはjovyanにしておく?
+# hadolint ignore=DL3002
 USER root
+
 # python3 path
 ENV PATH /opt/conda/bin:/notebooks/notebook/vcpsdk/cli:$PATH
 # PYTHONPATH for notebook
@@ -26,7 +33,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # netaddr==0.7.19 netifaces==0.10.5
-RUN /opt/conda/bin/conda install -y nbconvert jsonschema simplejson ruamel.yaml netaddr netifaces
+RUN /opt/conda/bin/conda install -y nbconvert jsonschema simplejson ruamel.yaml=0.15.95 netaddr netifaces
 COPY vcpcli_requirements.txt .
 RUN /opt/conda/bin/python -m pip install --ignore-installed PyYAML -r vcpcli_requirements.txt
 
@@ -46,7 +53,7 @@ COPY supervisord.conf /etc/supervisor/
 COPY supervisor_jupyter.conf /etc/supervisor/conf.d/jupyter.ini
 
 # JupyterPassword change script
-# /notebooks/notebook
+WORKDIR /notebooks/notebook
 RUN chown "$NB_USER" .
 RUN mkdir tools
 COPY chpasswd.sh tools
@@ -56,7 +63,7 @@ ENV GIT_EDITOR vi
 # gitのブランチ名、補間
 COPY git-prompt /etc/
 
-# ENTRYPOINT ["/opt/conda/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+ENTRYPOINT ["/opt/conda/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 
 # VCPでのJupyter Notebook固有の設定
 # Jupyter Notebook内のユーザとグループ
@@ -74,15 +81,4 @@ COPY custom.css /home/$NB_USER/.jupyter/custom/custom.css.vcp
 RUN cat /home/$NB_USER/.jupyter/custom/custom.css.vcp >> /home/$NB_USER/.jupyter/custom/custom.css
 RUN chown $NB_USER:$NB_GROUP /home/$NB_USER/.jupyter/custom/custom.css
 
-#RUN chown -R $NB_USER:$NB_GROUP /notebooks/notebook
-#ARG NB_USER=jovyan
-#ARG NB_UID=1000
-#ENV USER ${NB_USER}
-#ENV NB_UID ${NB_UID}
-#ENV HOME /home/${NB_USER}
-
-# Make sure the contents of our repo are in ${HOME}
-COPY . ${HOME}
-USER root
-RUN chown -R ${NB_UID} ${HOME}
-USER ${NB_USER}
+RUN chown -R $NB_USER:$NB_GROUP /notebooks/notebook
